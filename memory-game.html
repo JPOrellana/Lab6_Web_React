@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Juego de Memoria React</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- React + React-DOM (UMD) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
+  <!-- Babel (compila el JSX in-browser) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- anime.js para la animación del flip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <!-- ESTILOS RESPONSIVE -->
+  <style>
+    :root{
+      --card: clamp(70px, 20vw, 110px); /* se adapta móvil-desktop   */
+      --gap : 10px;
+      --primary:#4f46e5;
+      --bg:#f3f4f6;
+      --text:#111827;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+
+    body{
+      font-family:Inter,system-ui,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      min-height:100vh;
+      padding:2rem 1rem;
+    }
+    h1{margin-bottom:1rem;text-align:center}
+
+    /* grid autosize */
+    #game{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(var(--card),1fr));
+      gap:var(--gap);
+      width:100%;
+      max-width:500px;
+      perspective:1000px;
+    }
+
+    .card{
+      position:relative;
+      width:100%;
+      aspect-ratio:1/1;            
+      transform-style:preserve-3d;
+      cursor:pointer;
+    }
+    .card.flipped{pointer-events:none}
+
+    .face{
+      position:absolute;inset:0;
+      backface-visibility:hidden;
+      border-radius:0.75rem;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:2rem;
+      background:transparent;
+      border:2px solid var(--primary);
+      box-shadow:0 2px 6px rgba(0,0,0,.1);
+    }
+    .front{background:var(--primary);color:transparent}
+    .back {background:#fff;color:var(--text);transform:rotateY(180deg)}
+
+    #stats   {margin-top:1rem;font-weight:600}
+    #message {margin-top:1rem;font-size:1.25rem;font-weight:700;text-align:center}
+
+    button.restart{
+      margin-top:1rem;
+      padding:0.5rem 1.25rem;
+      background:var(--primary);
+      color:#fff;
+      border:none;border-radius:0.5rem;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    @media (min-width:600px){ :root{--gap:14px} }
+    @media (min-width:1024px){
+      body{padding-top:3rem}
+      h1{font-size:2.2rem}
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Juego de Memoria</h1>
+  <div id="root"></div>
+
+  <!-- LÓGICA REACT / JSX -->
+  <script type="text/babel" data-presets="react">
+/* 1. Datos: 8 parejas de emojis = 16 cartas */
+const icons = ["🍕","🍔","🍟","🌭","🍿","🥐","🍩","🥞"];
+
+/* 2. Mezclar array (Fisher-Yates) */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+/* 3. Tarjeta */
+function Card({value,index,isFlipped,onClick}){
+  const ref = React.useRef(null);
+
+  React.useEffect(()=>{
+    anime({
+      targets:ref.current,
+      rotateY:isFlipped?180:0,
+      duration:600,
+      easing:"easeInOutQuad"
+    });
+  },[isFlipped]);
+
+  return (
+    <div
+      ref={ref}
+      className={"card"+(isFlipped?" flipped":"")}
+      onClick={()=>onClick(index)}
+    >
+      <div className="face front"></div>
+      <div className="face back">{value}</div>
+    </div>
+  );
+}
+
+/* 4. Juego completo */
+function MemoryGame(){
+  const [cards,setCards]   = React.useState(()=>shuffle([...icons,...icons]));
+  const [flipped,setFlip]  = React.useState([]);
+  const [matched,setMatch] = React.useState([]);
+  const [moves,setMoves]   = React.useState(0);
+  const [done,setDone]     = React.useState(false);
+
+  /* manejo de clic */
+  const handleClick = i=>{
+    if(flipped.length===2||flipped.includes(i)||matched.includes(i)) return;
+    setFlip([...flipped,i]);
+  };
+
+  /* comparar cada pareja */
+  React.useEffect(()=>{
+    if(flipped.length===2){
+      setMoves(m=>m+1);
+      const [a,b]=flipped;
+      if(cards[a]===cards[b]){
+        setMatch(m=>[...m,a,b]);
+        setFlip([]);
+      }else{
+        setTimeout(()=>setFlip([]),900);
+      }
+    }
+  },[flipped]);
+
+  /* fin del juego */
+  React.useEffect(()=>{
+    if(matched.length===cards.length) setDone(true);
+  },[matched]);
+
+  /* reiniciar */
+  const restart = ()=>{
+    setCards(shuffle([...icons,...icons]));
+    setFlip([]); setMatch([]); setMoves(0); setDone(false);
+  };
+
+  return (
+    <div>
+      <div id="game">
+        {cards.map((v,i)=>(
+          <Card
+            key={i}
+            value={v}
+            index={i}
+            isFlipped={flipped.includes(i)||matched.includes(i)}
+            onClick={handleClick}
+          />
+        ))}
+      </div>
+
+      <div id="stats">Movimientos: {moves}</div>
+
+      {done && (
+        <>
+          <div id="message">🎉 ¡Juego completado! 🎉</div>
+          <button className="restart" onClick={restart}>Reiniciar</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* 5. Renderizar */
+ReactDOM.createRoot(document.getElementById("root")).render(<MemoryGame />);
+  </script>
+</body>
+</html>
